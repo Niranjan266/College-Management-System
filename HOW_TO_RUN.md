@@ -54,15 +54,43 @@ Generate a secret key with:
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-### 3. Run the migrations against Postgres
+### 3. Run the migrations and load the demo data
 
 Vercel does not run migrations for you. From your machine, once:
 
 ```
 set DATABASE_URL=postgres://user:pass@host/dbname
 python manage.py migrate
-python manage.py createsuperuser
+python manage.py loaddata demo_data
 ```
+
+`demo_data` is `main_app/fixtures/demo_data.json` — the courses, subjects,
+attendance records, results, feedback and notifications from the original local
+SQLite database, plus these accounts:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Superuser | lms@niranjand.in | admin |
+| Admin (demo) | admin@admin.com | admin |
+| Staff | staffone@staff.com | staffone |
+| Student | studentone@student.com | studentone |
+| Student | studenttwo@student.com | studenttwo |
+| Student | studentthree@student.com | studentthree |
+| Student | studentfour@student.com | studentfour |
+
+The staff and student rows are shown on the login page and fill the form when
+clicked. Re-running `loaddata demo_data` resets the demo back to this state.
+
+> These are public credentials on a public site. Anyone can log in as admin and
+> change or delete the data. Do not put anything real behind them.
+
+### reCAPTCHA
+
+The login page's captcha is disabled unless you set both `RECAPTCHA_SITE_KEY`
+and `RECAPTCHA_SECRET_KEY`. It has to stay off for the demo: a Google site key
+only works on the domains it was registered for, and the keys that used to be
+hardcoded in `views.py` belong to the original author's deployment, so login
+would fail on `lms.niranjand.in` with no way to recover.
 
 ### 4. Deploy
 
