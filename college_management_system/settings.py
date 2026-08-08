@@ -126,12 +126,18 @@ if EPHEMERAL_DEMO_DB:
 else:
     DB_URL = DATABASE_URL or f'sqlite:///{BASE_DIR / "db.sqlite3"}'
 
+# Hosted Postgres needs SSL; a local/socket Postgres refuses it. Override with
+# DB_SSL_REQUIRE=0 if your provider does not want sslmode=require.
+DB_SSL_REQUIRE = os.environ.get(
+    'DB_SSL_REQUIRE', '1' if DATABASE_URL else '0'
+).lower() not in ('false', '0', 'no')
+
 DATABASES = {
     'default': dj_database_url.parse(
         DB_URL,
         conn_max_age=600,
         conn_health_checks=True,  # serverless reuses instances; verify before use
-        ssl_require=bool(DATABASE_URL),
+        ssl_require=DB_SSL_REQUIRE,
     )
 }
 

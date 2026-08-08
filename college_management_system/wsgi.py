@@ -15,36 +15,64 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'college_management_system.setti
 
 application = get_wsgi_application()
 
+# Advisory lock id, so that if several serverless instances cold-start at once
+# only one of them runs the migrations.
+_BOOTSTRAP_LOCK_ID = 727212
 
-def _seed_ephemeral_demo_database():
-    """Build the demo database in /tmp on cold start.
 
-    Only runs on Vercel when no Postgres is attached. Vercel's filesystem is
-    read-only apart from /tmp, and /tmp starts empty on every new serverless
-    instance, so the schema and demo rows have to be recreated here rather than
-    shipped in the bundle. Takes a couple of seconds, once per cold start.
+def _needs_bootstrap():
+    """Return (needs_migrate, needs_seed) for the configured database."""
+    from django.db import connection
 
-    Attaching a database under Vercel Storage sets DATABASE_URL, which turns
-    this off and makes the data durable instead.
+    needs_migrate = 'main_app_customuser' not in connection.introspection.table_names()
+    if needs_migrate:
+        return True, True
+
+    from main_app.models import CustomUser
+    return False, not CustomUser.objects.exists()
+
+
+def _bootstrap_database():
+    """Create the schema and load the demo data if the database is empty.
+
+    Vercel never runs `migrate` for you, and on the ephemeral SQLite fallback
+    /tmp starts empty on every new instance, so without this the first query
+    fails with "relation main_app_customuser does not exist".
+
+    Only ever runs against an empty database, so it cannot clobber real data.
     """
-    from django.conf import settings
+    if not os.environ.get('VERCEL'):
+        return  # locally you run migrate yourself
 
-    if not getattr(settings, 'EPHEMERAL_DEMO_DB', False):
-        return
-
-    db_path = settings.DATABASES['default']['NAME']
-    if os.path.exists(db_path) and os.path.getsize(db_path) > 0:
-        return
-
+    from django.db import connection
     from django.core.management import call_command
 
-    print(f'Seeding ephemeral demo database at {db_path} ...')
-    call_command('migrate', verbosity=0, interactive=False)
-    call_command('loaddata', 'demo_data', verbosity=1)
-    print('Demo database ready.')
+    needs_migrate, needs_seed = _needs_bootstrap()
+    if not (needs_migrate or needs_seed):
+        return
+
+    use_lock = connection.vendor == 'postgresql'
+    if use_lock:
+        with connection.cursor() as cur:
+            cur.execute('SELECT pg_advisory_lock(%s)', [_BOOTSTRAP_LOCK_ID])
+    try:
+        # Re-check: another instance may have finished while we waited.
+        needs_migrate, needs_seed = _needs_bootstrap()
+        if needs_migrate:
+            print('Bootstrapping database: running migrations ...')
+            call_command('migrate', verbosity=1, interactive=False)
+        if needs_seed:
+            print('Bootstrapping database: loading demo data ...')
+            call_command('loaddata', 'demo_data', verbosity=1)
+        if needs_migrate or needs_seed:
+            print('Database bootstrap complete.')
+    finally:
+        if use_lock:
+            with connection.cursor() as cur:
+                cur.execute('SELECT pg_advisory_unlock(%s)', [_BOOTSTRAP_LOCK_ID])
 
 
 try:
-    _seed_ephemeral_demo_database()
-except Exception as exc:  # never let seeding take the whole app down
-    print(f'WARNING: could not seed demo database: {exc!r}')
+    _bootstrap_database()
+except Exception as exc:  # never let bootstrapping take the whole app down
+    print(f'WARNING: database bootstrap failed: {exc!r}')
