@@ -21,8 +21,10 @@
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <!-- Google Recaptcha -->
+    <!-- Google Recaptcha (only loaded when RECAPTCHA_SITE_KEY is configured) -->
+    {% if recaptcha_site_key %}
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    {% endif %}
 </head>
 
 <body>
@@ -44,6 +46,22 @@
             {% endfor %}
             {% endif %}
 
+            <!-- Demo credentials -->
+            <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 0.85rem;">
+                <strong>Demo logins</strong> &mdash; click to fill
+                <table class="table table-sm mb-0 mt-1" style="font-size: 0.82rem;">
+                    <tr class="demo-fill" data-email="admin@admin.com" data-password="admin" style="cursor:pointer;">
+                        <td>Admin</td><td>admin@admin.com</td><td>admin</td>
+                    </tr>
+                    <tr class="demo-fill" data-email="staffone@staff.com" data-password="staffone" style="cursor:pointer;">
+                        <td>Staff</td><td>staffone@staff.com</td><td>staffone</td>
+                    </tr>
+                    <tr class="demo-fill" data-email="studentone@student.com" data-password="studentone" style="cursor:pointer;">
+                        <td>Student</td><td>studentone@student.com</td><td>studentone</td>
+                    </tr>
+                </table>
+            </div>
+
             <!-- Login Form -->
             <form action="doLogin/" method="post" class="login-form">
                 {% csrf_token %}
@@ -64,10 +82,12 @@
                         placeholder="Enter your password" required>
                 </div>
 
-                <!-- reCAPTCHA  "6LfTGD4qAAAAAJLKy1TGJY7uuTh_T1cB5VikRWjF" "6LfHPwojAAAAAAmIefBYBh_y9qTAmKrzIXWF_6FZ"- local-->
+                <!-- reCAPTCHA: set RECAPTCHA_SITE_KEY / RECAPTCHA_SECRET_KEY env vars to enable -->
+                {% if recaptcha_site_key %}
                 <div class="form-group text-center">
-                    <div class="g-recaptcha" data-sitekey="6LfTGD4qAAAAAJLKy1TGJY7uuTh_T1cB5VikRWjF"></div>
+                    <div class="g-recaptcha" data-sitekey="{{ recaptcha_site_key }}"></div>
                 </div>
+                {% endif %}
 
                 <div class="form-group">
                     <div class="form-check">
@@ -134,6 +154,14 @@
             // Animate login card on load
             const loginCard = document.querySelector('.login-card');
             loginCard.style.animation = 'fadeIn 0.6s ease';
+
+            // Click a demo row to fill the login form
+            document.querySelectorAll('.demo-fill').forEach(row => {
+                row.addEventListener('click', function () {
+                    document.getElementById('email').value = this.dataset.email;
+                    document.getElementById('password').value = this.dataset.password;
+                });
+            });
 
             // Remember Me functionality
             const rememberCheckbox = document.getElementById('remember');

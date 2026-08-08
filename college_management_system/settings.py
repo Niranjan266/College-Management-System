@@ -31,6 +31,7 @@ ALLOWED_HOSTS = ['*']  # Vercel terminates on its own domain; hosts are validate
 
 CSRF_TRUSTED_ORIGINS = [
     'https://lms.niranjand.in',
+    'https://college-management-system-lovat.vercel.app',
     'https://*.vercel.app',
 ]
 
@@ -167,6 +168,12 @@ EMAIL_PORT = 587
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = True
+
+# Google reCAPTCHA on the login page. Both must be set for it to be enforced;
+# leave them unset to disable the captcha (required for the public demo, since
+# a site key only works on the domains it was registered for).
+RECAPTCHA_SITE_KEY = os.environ.get('RECAPTCHA_SITE_KEY', '')
+RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', '')
 
 STORAGES = {
     'default': {
