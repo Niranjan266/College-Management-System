@@ -12,8 +12,6 @@ import dj_database_url
 import os
 from pathlib import Path
 
-from django.core.exceptions import ImproperlyConfigured
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,8 +24,11 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Set DEBUG=False in the Vercel environment variables.
-DEBUG = os.environ.get('DEBUG', 'True').lower() not in ('false', '0', 'no')
+# Defaults to False on Vercel so a public deployment never leaks tracebacks and
+# settings on an error page, and to True locally for development.
+DEBUG = os.environ.get(
+    'DEBUG', 'False' if os.environ.get('VERCEL') else 'True'
+).lower() not in ('false', '0', 'no')
 
 ALLOWED_HOSTS = ['*']  # Vercel terminates on its own domain; hosts are validated upstream
 
@@ -100,7 +101,7 @@ WSGI_APPLICATION = 'college_management_system.wsgi.application'
 
 # Database
 # SQLite locally; Postgres in production. Vercel's filesystem is read-only, so
-# SQLite CANNOT be used there.
+# a normal SQLite file cannot be used there.
 #
 # Vercel's storage integrations each inject a different variable name, so check
 # all the common ones rather than DATABASE_URL alone:
@@ -113,25 +114,32 @@ DATABASE_URL = (
     or os.environ.get('POSTGRES_URL_NON_POOLING')
 )
 
-if not DATABASE_URL and os.environ.get('VERCEL'):
-    # Without this the app silently falls back to SQLite and every database
-    # query dies with "unable to open database file", which says nothing about
-    # the actual problem.
-    raise ImproperlyConfigured(
-        'No database configured. This app cannot use SQLite on Vercel because '
-        'the filesystem is read-only. Add a Postgres database under Vercel '
-        'Storage (Neon or Supabase), or set DATABASE_URL manually under '
-        'Project Settings -> Environment Variables, then redeploy.'
-    )
+# True when running on Vercel with no real database attached. In that mode the
+# app falls back to a throwaway SQLite file in /tmp (the only writable path),
+# seeded from the demo fixture on cold start by wsgi.py. Good enough to browse
+# the demo; writes vanish when the instance is recycled. Attaching a Postgres
+# database under Vercel Storage flips this off automatically.
+EPHEMERAL_DEMO_DB = bool(os.environ.get('VERCEL')) and not DATABASE_URL
+
+if EPHEMERAL_DEMO_DB:
+    DB_URL = 'sqlite:////tmp/db.sqlite3'
+else:
+    DB_URL = DATABASE_URL or f'sqlite:///{BASE_DIR / "db.sqlite3"}'
 
 DATABASES = {
     'default': dj_database_url.parse(
-        DATABASE_URL or f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        DB_URL,
         conn_max_age=600,
         conn_health_checks=True,  # serverless reuses instances; verify before use
         ssl_require=bool(DATABASE_URL),
     )
 }
+
+if EPHEMERAL_DEMO_DB:
+    # Sessions must NOT live in the throwaway database: each serverless instance
+    # gets its own /tmp, so a DB-backed session would log the user out as soon as
+    # a request landed on a different instance. Signed cookies survive that.
+    SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 
 
 # Password validation
