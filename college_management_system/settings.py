@@ -12,6 +12,8 @@ import dj_database_url
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -97,14 +99,37 @@ WSGI_APPLICATION = 'college_management_system.wsgi.application'
 
 
 # Database
-# SQLite locally; Postgres in production via the DATABASE_URL environment
-# variable. Vercel's filesystem is read-only, so SQLite CANNOT be used there.
+# SQLite locally; Postgres in production. Vercel's filesystem is read-only, so
+# SQLite CANNOT be used there.
+#
+# Vercel's storage integrations each inject a different variable name, so check
+# all the common ones rather than DATABASE_URL alone:
+#   Neon      -> DATABASE_URL, DATABASE_URL_UNPOOLED
+#   Supabase  -> POSTGRES_URL, POSTGRES_URL_NON_POOLING
+DATABASE_URL = (
+    os.environ.get('DATABASE_URL')
+    or os.environ.get('POSTGRES_URL')
+    or os.environ.get('DATABASE_URL_UNPOOLED')
+    or os.environ.get('POSTGRES_URL_NON_POOLING')
+)
+
+if not DATABASE_URL and os.environ.get('VERCEL'):
+    # Without this the app silently falls back to SQLite and every database
+    # query dies with "unable to open database file", which says nothing about
+    # the actual problem.
+    raise ImproperlyConfigured(
+        'No database configured. This app cannot use SQLite on Vercel because '
+        'the filesystem is read-only. Add a Postgres database under Vercel '
+        'Storage (Neon or Supabase), or set DATABASE_URL manually under '
+        'Project Settings -> Environment Variables, then redeploy.'
+    )
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+    'default': dj_database_url.parse(
+        DATABASE_URL or f'sqlite:///{BASE_DIR / "db.sqlite3"}',
         conn_max_age=600,
-        ssl_require=bool(os.environ.get('DATABASE_URL')),
+        conn_health_checks=True,  # serverless reuses instances; verify before use
+        ssl_require=bool(DATABASE_URL),
     )
 }
 
