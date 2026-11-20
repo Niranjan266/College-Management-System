@@ -1,4 +1,6 @@
 import json
+import os
+
 import requests
 from django.contrib import messages
 from django.core.files.storage import FileSystemStorage
@@ -13,6 +15,21 @@ from django.views.generic import UpdateView
 from .forms import *
 from .models import *
 
+
+
+def send_push(url, body):
+    """Send a Firebase push notification if a server key is configured.
+
+    The key comes from the FCM_SERVER_KEY environment variable, never from
+    source code. Without it the in-app notification is still saved; only the
+    browser push is skipped.
+    """
+    key = os.environ.get('FCM_SERVER_KEY')
+    if not key:
+        return None
+    headers = {'Authorization': 'key=' + key,
+               'Content-Type': 'application/json'}
+    return requests.post(url, data=json.dumps(body), headers=headers, timeout=10)
 
 def admin_home(request):
     total_staff = Staff.objects.all().count()
@@ -644,10 +661,7 @@ def send_student_notification(request):
             },
             'to': student.admin.fcm_token
         }
-        headers = {'Authorization':
-                   'key=AAAA3Bm8j_M:APA91bElZlOLetwV696SoEtgzpJr2qbxBfxVBfDWFiopBWzfCfzQp2nRyC7_A2mlukZEHV4g1AmyC6P_HonvSkY2YyliKt5tT3fe_1lrKod2Daigzhb2xnYQMxUWjCAIQcUexAMPZePB',
-                   'Content-Type': 'application/json'}
-        data = requests.post(url, data=json.dumps(body), headers=headers)
+        send_push(url, body)
         notification = NotificationStudent(student=student, message=message)
         notification.save()
         return HttpResponse("True")
@@ -671,10 +685,7 @@ def send_staff_notification(request):
             },
             'to': staff.admin.fcm_token
         }
-        headers = {'Authorization':
-                   'key=AAAA3Bm8j_M:APA91bElZlOLetwV696SoEtgzpJr2qbxBfxVBfDWFiopBWzfCfzQp2nRyC7_A2mlukZEHV4g1AmyC6P_HonvSkY2YyliKt5tT3fe_1lrKod2Daigzhb2xnYQMxUWjCAIQcUexAMPZePB',
-                   'Content-Type': 'application/json'}
-        data = requests.post(url, data=json.dumps(body), headers=headers)
+        send_push(url, body)
         notification = NotificationStaff(staff=staff, message=message)
         notification.save()
         return HttpResponse("True")
