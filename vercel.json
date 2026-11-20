@@ -1,8 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "college_management_system/wsgi.py": {
-      "maxDuration": 60
-    }
-  }
-}
